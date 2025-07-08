@@ -1,0 +1,406 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Jira-Style Task Board</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/5968/5968343.png" type="image/png">
+
+    <style>
+        .dropzone {
+            min-height: 200px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+
+        .card-body small {
+            display: block;
+            font-size: 0.8rem;
+        }
+
+        .card-header {
+            font-weight: bold;
+            font-size: 1rem;
+        }
+
+        .modal-content {
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body style="background-color: #f4f5f7;">
+
+    <div class="container my-4" style="max-width: 90%;">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="text-primary">Task Board</h2>
+            <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#createTaskModal">
+                ➕ Create Task
+            </button>
+        </div>
+
+        <!-- Task board -->
+        <div id="taskList"></div>
+    </div>
+
+    <!-- Modal for Task Form -->
+    <div class="modal fade" id="createTaskModal" tabindex="-1" aria-labelledby="createTaskLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="createTaskLabel">Create New Task</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="taskForm">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Task Name</label>
+                            <input type="text" class="form-control form-control-sm" id="name" required />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control form-control-sm" id="description" rows="2"></textarea>
+                        </div>
+
+                        <div class="row align-items-end mb-3">
+                            <div class="col-md-4">
+                                <label for="taskdate" class="form-label">Task Date</label>
+                                <input type="datetime-local" class="form-control form-control-sm" id="taskdate" required />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label for="column" class="form-label">Status</label>
+                                <select class="form-select form-select-sm" id="column">
+                                    <option>To Do</option>
+                                    <option>In Progress</option>
+                                    <option>Done</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-4 form-check mt-4">
+                                <input class="form-check-input" type="checkbox" id="isFavorite" />
+                                <label class="form-check-label small" for="isFavorite">Mark as Favorite</label>
+                            </div>
+                        </div>
+
+                        <div id="result" class="mb-2 text-success small"></div>
+
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-primary btn-sm">💾 Save Task</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Your Script -->
+    <script>
+        const apiUrl = "https://localhost:44379/api/task";
+
+        window.onload = function () {
+            loadTasks();
+        };
+
+        let allTasks = [];
+        let sortOrders = {
+            "To Do": "asc",
+            "In Progress": "asc",
+            "Done": "asc"
+        };
+
+        function loadTasks() {
+            fetch(apiUrl)
+                .then(res => res.json())
+                .then(tasks => {
+                    allTasks = tasks;
+                    const taskList = document.getElementById('taskList');
+                    taskList.innerHTML = '';
+
+                    const statuses = ["To Do", "In Progress", "Done"];
+                    const board = document.createElement('div');
+                    board.className = 'row';
+
+                    statuses.forEach(status => {
+                        const statusId = status.replace(/\s/g, '');
+                        const col = document.createElement('div');
+                        col.className = 'col-md-4';
+
+                        col.innerHTML = `
+                      <div class="card bg-light mb-3">
+                        <div class="card-header text-white bg-dark d-flex justify-content-between align-items-center">
+                          <span>${status}</span>
+                          <button class="btn btn-sm btn-outline-light" onclick="sortColumn('${status}')">
+                            Sort ${sortOrders[status] === 'asc' ? '🔽' : '🔼'}
+                          </button>
+                        </div>
+                        <div class="card-body p-2 dropzone" id="${statusId}Column"
+                             data-status="${status}"
+                             ondragover="event.preventDefault()"
+                             ondrop="handleDrop(event)">
+                        </div>
+                      </div>
+                    `;
+                        board.appendChild(col);
+                    });
+
+                    taskList.appendChild(board);
+
+                    // ✅ Sort tasks on load: favorite first, then name
+                    const sortedTasks = tasks.sort((a, b) => {
+                        if (a.isFavorite !== b.isFavorite) {
+                            return b.isFavorite - a.isFavorite;
+                        }
+                        return a.name.localeCompare(b.name);
+                    });
+
+                    sortedTasks.forEach(t => {
+                        const rawDate = t.taskdate || t.Taskdate;
+                        const taskdateTime = rawDate
+                            ? new Date(rawDate).toLocaleString('en-GB', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: true
+                            })
+                            : 'No date';
+
+                        const card = document.createElement('div');
+                        card.className = "card mb-2 shadow-sm";
+                        card.setAttribute('draggable', 'true');
+                        card.setAttribute('data-id', t.id);
+                        card.addEventListener('dragstart', handleDragStart);
+
+                        card.innerHTML = `
+                            <div class="card-body p-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <strong class="text-primary">${t.name}</strong>
+                                    ${t.isFavorite ? '<span class="text-warning">⭐</span>' : ''}
+                                </div>
+                                <p class="mb-1 small">${t.description || ''}</p>
+                                <small class="text-muted">📅 ${taskdateTime}</small>
+                                <div class="mt-2 d-flex justify-content-end gap-2">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="editTask('${t.id}')" title="Edit">✏️</button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteTask('${t.id}')" title="Delete">🗑️</button>
+                                </div>
+                            </div>
+                        `;
+
+                        const target = document.getElementById(t.column.replace(/\s/g, '') + "Column");
+                        target?.appendChild(card);
+                    });
+                })
+                .catch(err => {
+                    console.error(err);
+                    document.getElementById('taskList').innerHTML = '<p class="text-danger">❌ Error loading tasks.</p>';
+                });
+        }
+
+        document.getElementById('taskForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const form = document.getElementById('taskForm');
+            const editId = form.getAttribute('data-edit-id');
+            const method = editId ? 'PUT' : 'POST';
+            const url = editId ? `${apiUrl}/${editId}` : apiUrl;
+            var task = {};
+            if (editId != null) {
+                task = {
+                    id: editId,
+                    name: document.getElementById('name').value,
+                    description: document.getElementById('description').value,
+                    taskdate: document.getElementById('taskdate').value,
+                    column: document.getElementById('column').value,
+                    isFavorite: document.getElementById('isFavorite').checked
+                };
+            }
+            else
+            {
+                task = {
+                    name: document.getElementById('name').value,
+                    description: document.getElementById('description').value,
+                    taskdate: document.getElementById('taskdate').value,
+                    column: document.getElementById('column').value,
+                    isFavorite: document.getElementById('isFavorite').checked
+                };
+
+            }
+
+            fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(task)
+            })
+                .then(res => {
+                    if (!res.ok) throw new Error("Request failed");
+                    return safeParseJson(res);
+                })
+                .then(() => {
+                    form.reset();
+                    form.removeAttribute('data-edit-id');
+                    document.getElementById('result').innerHTML = `✅ Task ${editId ? 'updated' : 'created'}!`;
+
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('createTaskModal'));
+                    if (modal) modal.hide();
+
+                    loadTasks();
+                })
+                .catch(err => {
+                    console.error(err);
+                    document.getElementById('result').innerHTML = `❌ Error submitting task.`;
+                });
+
+        });
+
+        function sortColumn(status) {
+            const columnId = status.replace(/\s/g, '') + "Column";
+            const direction = sortOrders[status] === 'asc' ? 1 : -1;
+
+            // Toggle sort order
+            sortOrders[status] = sortOrders[status] === 'asc' ? 'desc' : 'asc';
+
+            const sorted = allTasks
+                .filter(t => t.column === status)
+                .sort((a, b) => {
+                    // ⭐ Sort by favorite first (true comes before false)
+                    if (a.isFavorite !== b.isFavorite) {
+                        return b.isFavorite - a.isFavorite;
+                    }
+
+                    // 📋 Then sort by name
+                    return a.name.localeCompare(b.name) * direction;
+                });
+
+            const target = document.getElementById(columnId);
+            target.innerHTML = '';
+
+            sorted.forEach(t => {
+                const rawDate = t.taskdate || t.Taskdate;
+                const taskdateTime = rawDate
+                    ? new Date(rawDate).toLocaleString('en-GB', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true
+                    })
+                    : 'No date';
+
+                const card = document.createElement('div');
+                card.className = "card mb-2 shadow-sm";
+                card.setAttribute('draggable', 'true');
+                card.setAttribute('data-id', t.id);
+                card.addEventListener('dragstart', handleDragStart);
+
+                card.innerHTML = `
+                    <div class="card-body p-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <strong class="text-primary">${t.name}</strong>
+                            ${t.isFavorite ? '<span class="text-warning">⭐</span>' : ''}
+                        </div>
+                        <p class="mb-1 small">${t.description || ''}</p>
+                        <small class="text-muted">📅 ${taskdateTime}</small>
+                        <div class="mt-2 d-flex justify-content-end gap-2">
+                            <button class="btn btn-sm btn-outline-primary" onclick="editTask('${t.id}')" title="Edit">✏️</button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteTask('${t.id}')" title="Delete">🗑️</button>
+                        </div>
+                    </div>
+                `;
+
+                target.appendChild(card);
+            });
+        }
+
+
+        function safeParseJson(response) {
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+                return response.json();
+            } else {
+                return Promise.resolve({}); // return empty object instead of crashing
+            }
+        }
+
+        function editTask(id) {
+            fetch(`${apiUrl}/${id}`)
+                .then(res => {
+                    if (!res.ok) throw new Error("Request failed");
+                    const contentType = res.headers.get("content-type");
+                    if (contentType && contentType.includes("application/json")) {
+                        return res.json();
+                    } else {
+                        return {};
+                    }
+                })
+
+                .then(task => {
+                    document.getElementById('name').value = task.name;
+                    document.getElementById('description').value = task.description || '';
+                    document.getElementById('taskdate').value = task.taskdate;
+                    document.getElementById('column').value = task.column;
+                    document.getElementById('isFavorite').checked = task.isFavorite;
+
+                    document.getElementById('taskForm').setAttribute('data-edit-id', id);
+                    const modal = new bootstrap.Modal(document.getElementById('createTaskModal'));
+                    modal.show();
+                });
+        }
+
+        function deleteTask(id) {
+            if (!confirm("Are you sure you want to delete this task?")) return;
+
+            fetch(`${apiUrl}/${id}`, { method: 'DELETE' })
+            .then(res => {
+                if (!res.ok) throw new Error("Failed to delete");
+                return safeParseJson(res); // Even if 204 No Content
+            })
+            .then(() => loadTasks());
+
+        }
+
+        function handleDragStart(event) {
+            event.dataTransfer.setData("text/plain", event.target.getAttribute('data-id'));
+        }
+
+        function handleDrop(event) {
+            event.preventDefault();
+            const taskId = event.dataTransfer.getData("text/plain");
+            const newStatus = event.currentTarget.getAttribute("data-status");
+
+            fetch(`${apiUrl}/${taskId}`)
+            .then(res => res.json())
+            .then(task => {
+                task.column = newStatus;
+
+                return fetch(`${apiUrl}/${taskId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(task)
+                });
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Drag update failed");
+                return safeParseJson(res);
+            })
+            .then(() => loadTasks());
+
+        }
+
+        document.querySelector('[data-bs-target="#createTaskModal"]').addEventListener('click', () => {
+            const form = document.getElementById('taskForm');
+            form.reset();
+            form.removeAttribute('data-edit-id');
+            document.getElementById('result').innerHTML = '';
+        });
+    </script>
+</body>
+</html>
