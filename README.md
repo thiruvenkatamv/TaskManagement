@@ -9,9 +9,9 @@ A simple task tracking API built with ASP.NET Core and tested using NUnit.
 
 ## DB Connection Details
 Server : taskdbround2.database.windows.net
-Authentication Type : SQL Login
-User Name : taskdb
-Password : Test@1993
+- Authentication Type : SQL Login
+- User Name : taskdb
+- Password : Test@1993
 
 ## How to Run
 ```bash
