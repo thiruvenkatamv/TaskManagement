@@ -7,16 +7,17 @@ A simple task tracking API built with ASP.NET Core and tested using NUnit.
 - Entity Framework Core with SQL Server
 - NUnit test project included
 
-## How to Run
-```bash
-dotnet build
-dotnet test
-
 ## DB Connection Details
 Server : taskdbround2.database.windows.net
 Authentication Type : SQL Login
 User Name : taskdb
 Password : Test@1993
+
+## How to Run
+```bash
+dotnet build
+dotnet test
+
 
 #### 🧪 3. **Add More Test Cases**
 - BadRequest on mismatched IDs
