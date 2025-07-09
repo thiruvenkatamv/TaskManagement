@@ -12,6 +12,12 @@ A simple task tracking API built with ASP.NET Core and tested using NUnit.
 dotnet build
 dotnet test
 
+## DB Connection Details
+Server : taskdbround2.database.windows.net
+Authentication Type : SQL Login
+User Name : taskdb
+Password : Test@1993
+
 #### 🧪 3. **Add More Test Cases**
 - BadRequest on mismatched IDs
 - Update/Delete non-existent task
